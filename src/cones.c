@@ -15,7 +15,11 @@
 
 #include <float.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 
 /*
  * Cross-platform Complex Type Handling
@@ -357,6 +361,15 @@ void SCS(finish_cone)(ScsConeWork *c) {
   if (c->work_ell1_proj)
     scs_free(c->work_ell1_proj);
 #endif
+  if (c->psd_blocks)
+    scs_free(c->psd_blocks);
+  if (c->psd_works) {
+    scs_int i;
+    /* psd_works[0] is c itself */
+    for (i = 1; i < c->psd_works_len; ++i)
+      SCS(finish_cone)(c->psd_works[i]);
+    scs_free(c->psd_works);
+  }
   scs_free(c);
 }
 
@@ -1133,6 +1146,61 @@ static scs_int set_up_ell1_cone_work_space(ScsConeWork *c, const ScsCone *k) {
 }
 #endif
 
+/* Sort PSD blocks by decreasing cost n^3 (x4 for complex), then by index */
+static int compare_psd_blocks(const void *a, const void *b) {
+  const ScsPsdBlock *pa = (const ScsPsdBlock *)a;
+  const ScsPsdBlock *pb = (const ScsPsdBlock *)b;
+  scs_float ca = (pa->is_complex ? 4. : 1.) * pa->n * pa->n * (scs_float)pa->n;
+  scs_float cb = (pb->is_complex ? 4. : 1.) * pb->n * pb->n * (scs_float)pb->n;
+  if (ca != cb)
+    return ca < cb ? 1 : -1;
+  return (pa->idx > pb->idx) - (pa->idx < pb->idx);
+}
+
+/*
+ * Setup for the parallel PSD projection: one task list of real and complex
+ * PSD blocks, and one eigendecomposition workspace per OpenMP thread (at most
+ * one per block of dimension > 1). Each block gets the same LAPACK calls and
+ * workspace sizes on any thread, so the result is independent of threads.
+ */
+static scs_int set_up_psd_cone_work_spaces(ScsConeWork *c, const ScsCone *k) {
+  scs_int i, count = k->z + k->l + k->bsize, n_works = 1, n_large = 0;
+  c->psd_blocks_len = k->ssize + k->cssize;
+  if (c->psd_blocks_len == 0)
+    return 0;
+  c->psd_blocks =
+      (ScsPsdBlock *)scs_calloc(c->psd_blocks_len, sizeof(ScsPsdBlock));
+  if (!c->psd_blocks)
+    return -1;
+  for (i = 0; i < k->qsize; ++i)
+    count += k->q[i];
+  for (i = 0; i < c->psd_blocks_len; ++i) {
+    ScsPsdBlock *b = &(c->psd_blocks[i]);
+    b->is_complex = i >= k->ssize;
+    b->n = b->is_complex ? k->cs[i - k->ssize] : k->s[i];
+    b->idx = count;
+    count += b->is_complex ? get_csd_cone_size(b->n) : get_sd_cone_size(b->n);
+    n_large += b->n > 1;
+  }
+  qsort(c->psd_blocks, c->psd_blocks_len, sizeof(ScsPsdBlock),
+        compare_psd_blocks);
+
+#ifdef _OPENMP
+  n_works = MAX(1, MIN((scs_int)omp_get_max_threads(), n_large));
+#endif
+  c->psd_works = (ScsConeWork **)scs_calloc(n_works, sizeof(ScsConeWork *));
+  if (!c->psd_works)
+    return -1;
+  c->psd_works_len = n_works;
+  c->psd_works[0] = c;
+  for (i = 1; i < n_works; ++i) {
+    c->psd_works[i] = (ScsConeWork *)scs_calloc(1, sizeof(ScsConeWork));
+    if (!c->psd_works[i] || set_up_cone_work_spaces(c->psd_works[i], k) < 0)
+      return -1;
+  }
+  return 0;
+}
+
 /* ====================== Cone Projections ============================= */
 
 /*
@@ -1661,34 +1729,44 @@ static scs_int proj_cone(scs_float *x, const ScsCone *k, ScsConeWork *c,
     }
   }
 
-  /* 5. PSD Cone */
-  if (k->ssize) {
-    for (i = 0; i < k->ssize; ++i) {
+  /* 5. Real and Complex PSD Cones, blocks in parallel */
+  if (c->psd_blocks_len) {
 #ifdef USE_SPECTRAL_CONES
-      SPECTRAL_TIMING(SCS(tic)(&spec_mat_proj_timer);)
+    SPECTRAL_TIMING(SCS(tic)(&spec_mat_proj_timer);)
 #endif
-      status = proj_semi_definite_cone(&(x[count]), k->s[i], c,
-                                       r_y ? &(r_y[count]) : SCS_NULL);
+#ifdef _OPENMP
+#pragma omp parallel for schedule(dynamic, 1) num_threads(c->psd_works_len) \
+    reduction(min : status) if (c->psd_works_len > 1)
+#endif
+    for (i = 0; i < c->psd_blocks_len; ++i) {
+      const ScsPsdBlock *b = &(c->psd_blocks[i]);
+#ifdef _OPENMP
+      ScsConeWork *cw = c->psd_works[omp_get_thread_num()];
+#else
+      ScsConeWork *cw = c;
+#endif
+      scs_int block_status;
+      if (b->is_complex) {
+        block_status = proj_complex_semi_definite_cone(&(x[b->idx]), b->n, cw);
+      } else {
+        block_status = proj_semi_definite_cone(
+            &(x[b->idx]), b->n, cw, r_y ? &(r_y[b->idx]) : SCS_NULL);
+      }
+      status = MIN(status, block_status);
+    }
 #ifdef USE_SPECTRAL_CONES
-      SPECTRAL_TIMING(c->tot_time_mat_cone_proj +=
-                      SCS(tocq)(&spec_mat_proj_timer);)
+    SPECTRAL_TIMING(c->tot_time_mat_cone_proj +=
+                    SCS(tocq)(&spec_mat_proj_timer);)
 #endif
-      if (status < 0)
-        return status;
+    if (status < 0)
+      return status;
+    for (i = 0; i < k->ssize; ++i)
       count += get_sd_cone_size(k->s[i]);
-    }
-  }
-
-  /* 6. Complex PSD Cone */
-  if (k->cssize) {
-    for (i = 0; i < k->cssize; ++i) {
-      status = proj_complex_semi_definite_cone(&(x[count]), k->cs[i], c);
-      if (status < 0)
-        return status;
+    for (i = 0; i < k->cssize; ++i)
       count += get_csd_cone_size(k->cs[i]);
-    }
   }
 
+  /* 6. Exponential Cone */
   if (k->ep || k->ed) { /* doesn't use r_y */
 #ifdef _OPENMP
 #pragma omp parallel for
@@ -1699,7 +1777,7 @@ static scs_int proj_cone(scs_float *x, const ScsCone *k, ScsConeWork *c,
     count += 3 * (k->ep + k->ed);
   }
 
-  /* 8. Power Cone */
+  /* 7. Power Cone */
   if (k->psize) {
     scs_float v[3];
     scs_int idx;
@@ -1805,7 +1883,8 @@ ScsConeWork *SCS(init_cone)(ScsCone *k, scs_int m) {
       || (k->dsize) || (k->nucsize) || (k->sl_size)
 #endif
   ) {
-    if (set_up_cone_work_spaces(c, k) < 0) {
+    if (set_up_cone_work_spaces(c, k) < 0 ||
+        set_up_psd_cone_work_spaces(c, k) < 0) {
       SCS(finish_cone)(c);
       return SCS_NULL;
     }

@@ -20,6 +20,13 @@ extern "C" {
 #endif
 #endif
 
+/** A real or complex PSD cone block, for the parallel PSD projection. */
+typedef struct {
+  scs_int idx;        /* first index in the cone vector */
+  scs_int n;          /* matrix dimension */
+  scs_int is_complex; /* boolean, whether a complex PSD cone */
+} ScsPsdBlock;
+
 /* private data to help cone projection step */
 struct SCS_CONE_WORK {
   /*
@@ -39,6 +46,12 @@ struct SCS_CONE_WORK {
   scs_int *cone_boundaries_psd_n;
   /* scratch for PSD diagonal-congruence factors, length max PSD dim */
   scs_float *psd_gamma;
+  /* real and complex PSD blocks in order of decreasing cost */
+  ScsPsdBlock *psd_blocks;
+  scs_int psd_blocks_len;
+  /* eigendecomposition workspace per thread, psd_works[0] is this one */
+  ScsConeWork **psd_works;
+  scs_int psd_works_len;
   scs_int scaled_cones; /* boolean, whether the cones have been scaled */
   scs_float *s;         /* used for Moreau decomposition in projection */
   scs_int m;            /* total length of cone */
