@@ -63,7 +63,7 @@ struct SCS_CONE_WORK {
   /* workspace for eigenvector decompositions: */
   scs_float *Xs, *Z, *e, *work, *rwork;
   scs_complex_float *cXs, *cZ, *cwork;
-  blas_int *isuppz, *iwork;
+  blas_int *iwork;
   blas_int lwork, lcwork, lrwork, liwork;
 #endif
 
