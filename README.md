@@ -102,7 +102,8 @@ linsys/         Linear solver backends (pluggable architecture)
   cpu/direct/     Sparse LDLt (AMD ordering + QDLDL, default)
   cpu/indirect/   Conjugate gradient
   cpu/dense/      Dense Cholesky on the Gram reduction (LAPACK dpotrf)
-  mkl/direct/     Intel MKL Pardiso
+  mkl/direct/     Sparse LDLt (MKL Pardiso)
+  mkl/gram/       Sparse Cholesky on the Gram reduction (MKL Pardiso)
   accelerate/direct/  Apple Accelerate sparse LDLt (macOS)
   cudss/direct/   NVIDIA cuDSS
   gpu/indirect/   GPU iterative solver

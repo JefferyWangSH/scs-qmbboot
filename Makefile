@@ -88,6 +88,7 @@ $(DIRSRC)/private.o: $(DIRSRC)/private.c  $(DIRSRC)/private.h
 $(INDIRSRC)/private.o: $(INDIRSRC)/private.c $(INDIRSRC)/private.h
 $(DENSESRC)/private.o: $(DENSESRC)/private.c  $(DENSESRC)/private.h
 $(MKLSRC)/private.o: $(MKLSRC)/private.c  $(MKLSRC)/private.h
+$(MKLGRAMSRC)/private.o: $(MKLGRAMSRC)/private.c  $(MKLGRAMSRC)/private.h
 # --coverage is a host compiler option, so nvcc needs it via -Xcompiler.
 $(CUDSSSRC)/private.o: $(CUDSSSRC)/private.c  $(CUDSSSRC)/private.h
 	$(CUCC) $(INCLUDE) $(patsubst --coverage,-Xcompiler=--coverage,$(CUSTOM_FLAGS)) $(CUDSS_FLAGS) -I$(CUDSSSRC) -c $(CUDSSSRC)/private.c -o $@
@@ -111,6 +112,11 @@ $(OUT)/libscsdense.a: $(SCS_O) $(SCS_OBJECTS) $(DENSESRC)/private.o $(LINSYS)/sc
 	- $(RANLIB) $@
 
 $(OUT)/libscsmkl.a: $(SCS_MKL_O) $(SCS_OBJECTS) $(MKLSRC)/private.o $(LINSYS)/scs_matrix.o $(LINSYS)/csparse.o
+	mkdir -p $(OUT)
+	$(ARCHIVE) $@ $^
+	- $(RANLIB) $@
+
+$(OUT)/libscsmklgram.a: $(SCS_MKL_O) $(SCS_OBJECTS) $(MKLGRAMSRC)/private.o $(LINSYS)/scs_matrix.o $(LINSYS)/csparse.o
 	mkdir -p $(OUT)
 	$(ARCHIVE) $@ $^
 	- $(RANLIB) $@
@@ -145,6 +151,9 @@ $(OUT)/libscsdense.$(SHARED): $(SCS_O) $(SCS_OBJECTS) $(DENSESRC)/private.o $(LI
 	$(call link_shared,$(BLASLDFLAGS))
 
 $(OUT)/libscsmkl.$(SHARED): $(SCS_MKL_O) $(SCS_OBJECTS) $(MKLSRC)/private.o $(LINSYS)/scs_matrix.o $(LINSYS)/csparse.o
+	$(call link_shared,$(MKLFLAGS))
+
+$(OUT)/libscsmklgram.$(SHARED): $(SCS_MKL_O) $(SCS_OBJECTS) $(MKLGRAMSRC)/private.o $(LINSYS)/scs_matrix.o $(LINSYS)/csparse.o
 	$(call link_shared,$(MKLFLAGS))
 
 $(OUT)/libscscudss.$(SHARED): $(SCS_O) $(SCS_OBJECTS) $(CUDSSSRC)/private.o $(LINSYS)/scs_matrix.o $(LINSYS)/csparse.o
@@ -202,6 +211,8 @@ $(OUT)/run_tests_dense: test/run_tests.c $(OUT)/libscsdense.a
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS) $(BLASLDFLAGS) -Itest
 $(OUT)/run_tests_mkl: test/run_tests.c $(OUT)/libscsmkl.a
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS) $(MKLFLAGS) -Itest
+$(OUT)/run_tests_mkl_gram: test/run_tests.c $(OUT)/libscsmklgram.a
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS) $(MKLFLAGS) -Itest
 
 $(OUT)/run_tests_cudss: test/run_tests.c $(OUT)/libscscudss.a
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS) $(BLASLDFLAGS) $(CUDSS_LDFLAGS) -Itest
@@ -213,7 +224,7 @@ $(OUT)/run_tests_accelerate: test/run_tests.c $(OUT)/libscsaccel.a
 test_gpu: $(OUT)/run_tests_gpu_indirect
 
 .PHONY: mkl
-mkl: mklroot $(OUT)/libscsmkl.a $(OUT)/libscsmkl.$(SHARED) $(OUT)/run_tests_mkl $(OUT)/demo_socp_mkl
+mkl: mklroot $(OUT)/libscsmkl.a $(OUT)/libscsmkl.$(SHARED) $(OUT)/run_tests_mkl $(OUT)/demo_socp_mkl $(OUT)/libscsmklgram.a $(OUT)/libscsmklgram.$(SHARED) $(OUT)/run_tests_mkl_gram
 mklroot:
 ifndef MKLROOT
 	$(error MKLROOT is undefined, set MKLROOT to the MKL install location)
@@ -253,7 +264,7 @@ $(OUT)/demo_socp_gpu_indirect: test/random_socp_prob.c $(OUT)/libscsgpuindir.a
 
 .PHONY: clean purge
 clean:
-	@rm -rf $(TARGETS) $(SCS_O) $(SCS_INDIR_O) $(SCS_MKL_O) $(SCS_OBJECTS) $(AMD_OBJS) $(LDL_OBJS) $(LINSYS)/*.o $(DIRSRC)/*.o $(INDIRSRC)/*.o $(DENSESRC)/*.o $(MKLSRC)/*.o $(CUDSSSRC)/*.o $(ACCELSRC)/*.o $(GPUDIR)/*.o $(GPUINDIR)/*.o $(LINSYS)/gpu/*.o src/spectral_cones/*.o src/spectral_cones/*/*.o
+	@rm -rf $(TARGETS) $(SCS_O) $(SCS_INDIR_O) $(SCS_MKL_O) $(SCS_OBJECTS) $(AMD_OBJS) $(LDL_OBJS) $(LINSYS)/*.o $(DIRSRC)/*.o $(INDIRSRC)/*.o $(DENSESRC)/*.o $(MKLSRC)/*.o $(MKLGRAMSRC)/*.o $(CUDSSSRC)/*.o $(ACCELSRC)/*.o $(GPUDIR)/*.o $(GPUINDIR)/*.o $(LINSYS)/gpu/*.o src/spectral_cones/*.o src/spectral_cones/*/*.o
 	@rm -rf $(OUT)/*.dSYM
 	@rm -rf matlab/*.mex*
 	@rm -rf .idea

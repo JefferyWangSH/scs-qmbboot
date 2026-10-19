@@ -90,6 +90,7 @@ DENSESRC = $(LINSYS)/cpu/dense
 GPUDIR = $(LINSYS)/gpu/direct
 GPUINDIR = $(LINSYS)/gpu/indirect
 MKLSRC = $(LINSYS)/mkl/direct
+MKLGRAMSRC = $(LINSYS)/mkl/gram
 CUDSSSRC = $(LINSYS)/cudss/direct
 ACCELSRC = $(LINSYS)/accelerate/direct
 

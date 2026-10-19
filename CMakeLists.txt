@@ -465,7 +465,7 @@ endif()
 if(DEFINED ENV{MKLROOT})
 
   message(STATUS "MKLROOT set to $ENV{MKLROOT}")
-  message(STATUS "Will install SCS-MKL (libscsmkl).")
+  message(STATUS "Will install SCS-MKL (libscsmkl, libscsmklgram).")
 
   if(BLAS64 AND NOT DLONG)
     message(FATAL_ERROR
@@ -535,6 +535,55 @@ if(DEFINED ENV{MKLROOT})
     PUBLIC_HEADER DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/scs")
 
   set_property(GLOBAL APPEND PROPERTY SCS_TARGETS ${${PROJECT_NAME}_MKL})
+
+  set(MKLGRAMSRC ${LINSYS}/mkl/gram)
+
+  # MKL Pardiso sparse Gram solver library, linked as the library above
+  set(${PROJECT_NAME}_MKLGRAM ${PROJECT_NAME}mklgram)
+  add_library(
+    ${${PROJECT_NAME}_MKLGRAM}
+    ${${PROJECT_NAME}_HDR} ${${PROJECT_NAME}_SRC} ${MKLGRAMSRC}/private.c
+    ${MKLGRAMSRC}/private.h)
+
+  target_include_directories(
+    ${${PROJECT_NAME}_MKLGRAM}
+    PRIVATE
+      "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/${MKLGRAMSRC};${CMAKE_CURRENT_SOURCE_DIR}/${LINSYS}>"
+  )
+
+  target_include_directories(
+    ${${PROJECT_NAME}_MKLGRAM}
+    PUBLIC ${SCS_PUBLIC_INCLUDE_DIRS})
+
+  target_compile_definitions(
+    ${${PROJECT_NAME}_MKLGRAM}
+    PRIVATE ${COMPILER_OPTS} SCS_MKL)
+  target_link_options(${${PROJECT_NAME}_MKLGRAM} PRIVATE
+                      "$<$<PLATFORM_ID:Linux>:LINKER:--no-as-needed>")
+  target_link_libraries(
+    ${${PROJECT_NAME}_MKLGRAM}
+    PRIVATE $<$<NOT:$<PLATFORM_ID:Windows>>:m> MKL::MKL
+            $<$<BOOL:${OpenMP_C_FOUND}>:OpenMP::OpenMP_C> Threads::Threads
+            ${CMAKE_DL_LIBS})
+
+  set_target_properties(
+    ${${PROJECT_NAME}_MKLGRAM}
+    PROPERTIES VERSION ${scs_VERSION} SOVERSION ${SCS_ABI_VERSION}
+             PUBLIC_HEADER
+                                      "${${PROJECT_NAME}_PUBLIC_HDR}")
+
+  add_library(scs::${${PROJECT_NAME}_MKLGRAM} ALIAS ${${PROJECT_NAME}_MKLGRAM})
+
+  install(
+    TARGETS ${${PROJECT_NAME}_MKLGRAM}
+    EXPORT ${PROJECT_NAME}
+    COMPONENT runtime
+    LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT shlib
+    ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT lib
+    RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT bin
+    PUBLIC_HEADER DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/scs")
+
+  set_property(GLOBAL APPEND PROPERTY SCS_TARGETS ${${PROJECT_NAME}_MKLGRAM})
 else()
   message(
     STATUS "MKLROOT environment variable is undefined, skipping SCS-MKL install"
@@ -773,6 +822,7 @@ if(BUILD_TESTING)
 
   if(DEFINED ENV{MKLROOT})
     scs_add_test(run_tests_mkl scs::scsmkl)
+    scs_add_test(run_tests_mkl_gram scs::scsmklgram)
   endif()
 
   if(USE_CUDSS)
