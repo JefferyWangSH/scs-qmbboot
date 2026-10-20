@@ -1942,16 +1942,22 @@ scs_int SCS(proj_dual_cone)(scs_float *x, ScsConeWork *c,
     c->scaled_cones = 1;
   }
 
-  /* Copy s = x */
-  memcpy(c->s, x, c->m * sizeof(scs_float));
-
-  /* x -> - Rx; hoist the r_y != NULL check outside the loop */
+  /* Copy s = x and x -> - Rx in one pass; hoist the r_y != NULL check
+   * outside the loop */
   if (r_y) {
+#ifdef _OPENMP
+#pragma omp parallel for
+#endif
     for (i = 0; i < c->m; ++i) {
+      c->s[i] = x[i];
       x[i] *= -r_y[i];
     }
   } else {
+#ifdef _OPENMP
+#pragma omp parallel for
+#endif
     for (i = 0; i < c->m; ++i) {
+      c->s[i] = x[i];
       x[i] = -x[i];
     }
   }
@@ -1961,10 +1967,16 @@ scs_int SCS(proj_dual_cone)(scs_float *x, ScsConeWork *c,
 
   /* Return x + R^{-1} \Pi_{C^*}^{R^{-1}} ( -x ); hoist r_y check */
   if (r_y) {
+#ifdef _OPENMP
+#pragma omp parallel for
+#endif
     for (i = 0; i < c->m; ++i) {
       x[i] = x[i] / r_y[i] + c->s[i];
     }
   } else {
+#ifdef _OPENMP
+#pragma omp parallel for
+#endif
     for (i = 0; i < c->m; ++i) {
       x[i] += c->s[i];
     }

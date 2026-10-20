@@ -128,11 +128,11 @@ In SCS
 ------
 
 In SCS both types of acceleration are available, though by default type-I is
-used since it tends to have better performance.  If you wish to use AA then set
+used since it tends to have better performance.  AA is disabled by default
+(:code:`acceleration_lookback` is :code:`0`). If you wish to use AA then set
 the :code:`acceleration_lookback` setting to a positive value (10 works well for
-many problems and is the default). This setting corresponds to :math:`m`, the
-maximum number of SCS iterates that AA will use to extrapolate to the new point.
-Set :code:`acceleration_lookback` to :code:`0` to disable AA entirely.
+many problems). This setting corresponds to :math:`m`, the maximum number of SCS
+iterates that AA will use to extrapolate to the new point.
 
 To select type-II acceleration set :code:`acceleration_type_1` to :code:`0`
 (the default :code:`1` selects type-I). Type-II is more numerically stable than

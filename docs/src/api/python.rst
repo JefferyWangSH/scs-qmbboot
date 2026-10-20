@@ -27,7 +27,7 @@ This module provides the :code:`SCS` class which is initialized using:
                   eps_infeas=1e-7,
                   alpha=1.5,
                   rho_x=1e-6,
-                  acceleration_lookback=10,
+                  acceleration_lookback=0,
                   acceleration_interval=5,
                   time_limit_secs=0,
                   write_data_filename=None,

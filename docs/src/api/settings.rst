@@ -84,7 +84,7 @@ They are set in the :ref:`ScsSettings <ScsSettings>` struct.
      - :code:`scs_int`
      - How much memory to use for Anderson acceleration. More memory requires more time to compute but can give more reliable steps. :code:`0` disables it. See :ref:`acceleration`.
      - :math:`\mathbf{N}`
-     - 10
+     - 0
    * - :code:`acceleration_interval`
      - :code:`scs_int`
      - Run Anderson acceleration every :code:`acceleration_interval` iterations. See :ref:`acceleration`.

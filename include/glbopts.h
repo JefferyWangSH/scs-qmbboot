@@ -42,7 +42,7 @@ extern "C" {
 #define VERBOSE (1)
 #define NORMALIZE (1)
 #define WARM_START (0)
-#define ACCELERATION_LOOKBACK (10)
+#define ACCELERATION_LOOKBACK (0)
 #define ACCELERATION_INTERVAL (5)
 #define ADAPTIVE_SCALE (1)
 #define ADAPTIVE_DIAG_SCALE (1)

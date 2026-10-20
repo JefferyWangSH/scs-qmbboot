@@ -797,9 +797,15 @@ static scs_int project_lin_sys(ScsWork *w, scs_int iter) {
   scs_float *warm_start = SCS_NULL;
   scs_float tol = -1.0; /* only used for indirect methods, overridden later */
   /* Copy and scale in one pass, eliminating the intermediate memcpy. */
+#ifdef _OPENMP
+#pragma omp parallel for
+#endif
   for (i = 0; i < n; ++i) {
     w->u_t[i] = w->v[i] * w->diag_r[i];
   }
+#ifdef _OPENMP
+#pragma omp parallel for
+#endif
   for (i = n; i < l - 1; ++i) {
     w->u_t[i] = -w->v[i] * w->diag_r[i];
   }
@@ -842,6 +848,9 @@ static scs_int project_lin_sys(ScsWork *w, scs_int iter) {
  */
 static void compute_rsk(ScsWork *w) {
   scs_int i, l = w->d->m + w->d->n + 1;
+#ifdef _OPENMP
+#pragma omp parallel for
+#endif
   for (i = 0; i < l; ++i) {
     w->rsk[i] = (w->v[i] + w->u[i] - 2 * w->u_t[i]) * w->diag_r[i];
   }
@@ -849,6 +858,9 @@ static void compute_rsk(ScsWork *w) {
 
 static void update_dual_vars(ScsWork *w) {
   scs_int i, l = w->d->n + w->d->m + 1;
+#ifdef _OPENMP
+#pragma omp parallel for
+#endif
   for (i = 0; i < l; ++i) {
     w->v[i] += w->stgs->alpha * (w->u[i] - w->u_t[i]);
   }
@@ -857,6 +869,9 @@ static void update_dual_vars(ScsWork *w) {
 /* status < 0 indicates failure */
 static scs_int project_cones(ScsWork *w, const ScsCone *k, scs_int iter) {
   scs_int i, n = w->d->n, l = w->d->n + w->d->m + 1, status;
+#ifdef _OPENMP
+#pragma omp parallel for
+#endif
   for (i = 0; i < l; ++i) {
     w->u[i] = 2 * w->u_t[i] - w->v[i];
   }
@@ -1505,7 +1520,7 @@ scs_int scs_update(ScsWork *w, scs_float *b, scs_float *c) {
 
 scs_int scs_solve(ScsWork *w, ScsSolution *sol, ScsInfo *info,
                   scs_int warm_start) {
-  scs_int i;
+  scs_int i, j;
   SCS(timer) solve_timer, lin_sys_timer, cone_timer, accel_timer;
   scs_float total_accel_time = 0.0, total_cone_time = 0.0,
             total_lin_sys_time = 0.0;
@@ -1552,7 +1567,12 @@ scs_int scs_solve(ScsWork *w, ScsSolution *sol, ScsInfo *info,
 
     /* store v_prev = v for AA safeguard; skip when acceleration is off */
     if (w->accel) {
-      memcpy(w->v_prev, w->v, l * sizeof(scs_float));
+#ifdef _OPENMP
+#pragma omp parallel for
+#endif
+      for (j = 0; j < l; ++j) {
+        w->v_prev[j] = w->v[j];
+      }
     }
 
     /******************* linear system solve ********************/
