@@ -770,6 +770,11 @@ if(APPLE AND USE_APPLE_ACCELERATE)
   set_property(GLOBAL APPEND PROPERTY SCS_TARGETS ${${PROJECT_NAME}_ACCEL})
 endif()
 
+# Python package scs_qmbboot (pip install ., see pyproject.toml).
+if(SKBUILD)
+  add_subdirectory(python)
+endif()
+
 # Install CMake package config files for find_package(scs) support.
 include(InstallBasicPackageFiles)
 # The config template re-finds a static library's private dependencies at the

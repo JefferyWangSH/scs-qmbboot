@@ -37,6 +37,7 @@ docs/*
 
 # Python
 *.pyc
+__pycache__/
 python/flags.tmp
 python/.coverage
 python/build/

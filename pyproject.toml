@@ -1,0 +1,53 @@
+# Python package scs_qmbboot: ctypes bindings to the solver libraries built
+# by CMakeLists.txt (python/). Linux: MKL Gram and QDLDL backends, needs MKL
+# (MKLROOT); macOS: Accelerate and QDLDL backends.
+#
+#   MKLROOT=$CONDA_PREFIX pip install .
+#
+# On x86_64 Linux: -march=x86-64-v4 if the build machine has AVX-512, unless
+# -Ccmake.define.CMAKE_C_FLAGS=... sets a -march (e.g. -march=native).
+
+[build-system]
+requires = ["scikit-build-core>=0.11"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "scs-qmbboot"
+dynamic = ["version"]
+description = "Splitting conic solver for quantum many-body bootstrap SDPs"
+license = "MIT"
+license-files = ["LICENSE.txt"]
+authors = [{ name = "Brendan O'Donoghue", email = "bodonoghue85@gmail.com" }]
+maintainers = [{ name = "Xu-Cheng Wang", email = "jefferywangsh@gmail.com" }]
+requires-python = ">=3.10"
+dependencies = ["numpy", "scipy"]
+
+[project.urls]
+Homepage = "https://github.com/JefferyWangSH/scs-qmbboot"
+
+[tool.scikit-build]
+minimum-version = "build-system.requires"
+cmake.version = ">=3.22"
+wheel.packages = ["python/scs_qmbboot"]
+# ctypes, no Python C API: one wheel for every Python 3
+wheel.py-api = "py3"
+# only the libraries of the package, not the C library install
+install.components = ["python"]
+
+[tool.scikit-build.metadata.version]
+provider = "scikit_build_core.metadata.regex"
+input = "include/glbopts.h"
+regex = 'SCS_VERSION \("(?P<value>[^"]+)"\)'
+result = "{value}+qmbboot.1"
+
+[tool.scikit-build.cmake.define]
+USE_OPENMP = "ON"
+
+[[tool.scikit-build.overrides]]
+if.platform-system = "linux"
+build.targets = ["scsdir", "scsmklgram"]
+
+[[tool.scikit-build.overrides]]
+if.platform-system = "darwin"
+build.targets = ["scsdir", "scsaccel"]
+cmake.define.USE_APPLE_ACCELERATE = "ON"
