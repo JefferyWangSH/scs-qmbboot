@@ -1,3 +1,88 @@
+# scs-qmbboot
+
+`scs-qmbboot` is a fork of [SCS](https://github.com/cvxgrp/scs)
+specialized for the semidefinite programs in the quantum many-body bootstrap.
+These problems typically involve a large number of positive semidefinite (PSD) cones
+and a sparse constraint matrix `A`.
+Exploiting this structure, we make the following optimizations.
+The changes to the solver are each **mathematically equivalent** to
+the corresponding step of upstream SCS and differ only in floating-point rounding,
+so with the same settings the solver performs the same iteration
+and **preserves the convergence behavior** of upstream SCS.
+
+- **Parallel PSD projection.**
+With many PSD blocks, the PSD projection dominates the iteration time
+since upstream SCS projects the PSD blocks serially.
+In `scs-qmbboot`, the PSD blocks are now projected in parallel with OpenMP.
+
+- **Divide-and-conquer eigensolvers.**
+The PSD projection needs the full eigendecomposition of every block.
+It now uses `syevd`/`heevd` instead of `syevr`/`heevr`;
+these drivers rely mostly on level-3 BLAS and are considerably faster,
+at the cost of a larger workspace.
+
+- **MKL Pardiso backend on the Gram reduction.**
+Factorizing the full KKT matrix of bootstrap SDPs is expensive and hard to parallelize.
+The dense backend of upstream SCS in [`linsys/cpu/dense`](linsys/cpu/dense)
+avoids the full KKT matrix by eliminating `y` and solving the reduced system
+with the symmetric positive definite Gram matrix `R_x + P + A' R_y^{-1} A`,
+which is in general dense and is factorized by a dense Cholesky decomposition.
+For bootstrap SDPs, however, every row of `A` has only a few nonzeros,
+so the Gram matrix is sparse. We therefore introduce the new backend `mkl_gram`
+in [`linsys/mkl/gram`](linsys/mkl/gram), which applies the same reduction
+but keeps the Gram matrix sparse and factorizes it in parallel with MKL Pardiso.
+Conversely, it is not suited to problems in which `A` has dense rows.
+
+- **Parallel element-wise loops.**
+Once the projection and the linear solve are parallel,
+the remaining vector operations of each iteration become a noticeable serial cost;
+they are now parallelized with OpenMP as well.
+
+- **Anderson acceleration off by default.**
+On bootstrap SDPs we observed no speedup from Anderson acceleration,
+so it is disabled by default (`acceleration_lookback = 0`).
+It can still be enabled through the settings.
+
+- **Python bindings.**
+The lightweight package `scs_qmbboot` in [`python/`](python/) wraps the C library
+through ctypes and follows the interface of [scs-python](https://github.com/bodono/scs-python).
+It supports the features needed for bootstrap SDPs
+and uses `mkl_gram` as its default linear solver on Linux.
+
+## Installation
+
+Python package (on Linux, make sure MKL is installed):
+
+```bash
+export MKLROOT="..."
+pip install git+https://github.com/JefferyWangSH/scs-qmbboot.git
+```
+
+```python
+import scs_qmbboot as scs
+
+data = {"A": ..., "b": ..., "c": ...}
+cone = {"z": ..., "l": ..., "s": [...], "cs": [...]}
+solver = scs.SCS(data, cone, linear_solver="mkl_gram", eps_abs=1e-6, eps_rel=1e-6)
+sol = solver.solve()  # sol["x"], sol["y"], sol["s"], sol["info"]
+```
+
+C libraries with the `mkl_gram` backend and OpenMP:
+
+```bash
+export MKLROOT="..."
+
+# with make
+make mkl USE_OPENMP=1
+
+# or with cmake: this will build all available backends
+cmake -B build -DUSE_OPENMP=ON && cmake --build build
+```
+
+The upstream SCS README follows.
+
+---
+
 <h1 align="center" margin=0px>
 <img src="https://github.com/cvxgrp/scs/blob/master/docs/src/_static/scs_logo.png" alt="Intersection of a cone and a polyhedron" width="450">
 </h1>
@@ -102,8 +187,7 @@ linsys/         Linear solver backends (pluggable architecture)
   cpu/direct/     Sparse LDLt (AMD ordering + QDLDL, default)
   cpu/indirect/   Conjugate gradient
   cpu/dense/      Dense Cholesky on the Gram reduction (LAPACK dpotrf)
-  mkl/direct/     Sparse LDLt (MKL Pardiso)
-  mkl/gram/       Sparse Cholesky on the Gram reduction (MKL Pardiso)
+  mkl/direct/     Intel MKL Pardiso
   accelerate/direct/  Apple Accelerate sparse LDLt (macOS)
   cudss/direct/   NVIDIA cuDSS
   gpu/indirect/   GPU iterative solver
