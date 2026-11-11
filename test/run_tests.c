@@ -44,7 +44,7 @@ const char *const mu_skipped = "skipped";
  * as skipped, and main() checks that run + skipped == MU_TOTAL_TESTS. A build
  * that silently loses tests therefore fails instead of printing ALL TESTS
  * PASSED. Bump this when adding a test. */
-#define MU_TOTAL_TESTS 73
+#define MU_TOTAL_TESTS 74
 
 #define _SKIP(problem)                                                         \
   static const char *problem(void) { return mu_skipped; }
@@ -60,10 +60,12 @@ _SKIP(test_validation)
 #include "problems/complex_PSD.h"
 #include "problems/sd_and_complex_sd.h"
 #include "problems/test_psd_metric.h"
+#include "problems/test_psd_parallel.h"
 #else
 _SKIP(complex_PSD)
 _SKIP(sd_and_complex_sd)
 _SKIP(test_psd_metric)
+_SKIP(test_psd_parallel)
 #endif
 
 /* solve SDPs from data files, requires blas / lapack */
@@ -104,15 +106,21 @@ _SKIP(test_spectral_metric_updates)
 #if NO_READ_WRITE == 0
 #include "problems/hs21_tiny_qp_rw.h"
 #include "problems/test_rw_settings.h"
-#include "problems/issue_140.h"
-#include "problems/max_ent.h"
 #include "problems/mpc_bug.h"
 #else
 _SKIP(hs21_tiny_qp_rw)
 _SKIP(test_rw_settings)
+_SKIP(mpc_bug)
+#endif
+
+/* solves large problems from data files. SKIP_SLOW_TESTS is for the simulated
+ * GPU in CI, where these two take nearly all of the job's hours of runtime */
+#if NO_READ_WRITE == 0 && !defined(SKIP_SLOW_TESTS)
+#include "problems/issue_140.h"
+#include "problems/max_ent.h"
+#else
 _SKIP(issue_140)
 _SKIP(max_ent)
-_SKIP(mpc_bug)
 #endif
 
 static void all_tests(void) {
@@ -126,6 +134,7 @@ static void all_tests(void) {
   mu_run_test(complex_PSD);
   mu_run_test(sd_and_complex_sd);
   mu_run_test(test_psd_metric);
+  mu_run_test(test_psd_parallel);
   mu_run_test(hs21_tiny_qp);
   mu_run_test(hs21_tiny_qp_rw);
   mu_run_test(test_rw_settings);
@@ -192,6 +201,8 @@ static void all_tests(void) {
 }
 int main(void) {
   int i;
+  /* line buffer so that a slow or stuck test is visible in a piped CI log */
+  setvbuf(stdout, NULL, _IOLBF, 0);
   all_tests();
   scs_printf("Tests run: %d, skipped: %d, total: %d\n", tests_run, tests_skipped,
              MU_TOTAL_TESTS);

@@ -11,9 +11,10 @@ so with the same settings the solver performs the same iteration
 and **preserves the convergence behavior** of upstream SCS.
 
 - **Parallel PSD projection.**
-With many PSD blocks, the PSD projection dominates the iteration time
-since upstream SCS projects the PSD blocks serially.
-In `scs-qmbboot`, the PSD blocks are now projected in parallel with OpenMP.
+With many PSD blocks, the PSD projection dominates the iteration time.
+`scs-qmbboot` projects the PSD blocks in parallel with OpenMP;
+upstream SCS added the same in [#505](https://github.com/cvxgrp/scs/pull/505),
+and we now use the upstream implementation.
 
 - **Divide-and-conquer eigensolvers.**
 The PSD projection needs the full eigendecomposition of every block.
