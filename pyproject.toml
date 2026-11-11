@@ -1,14 +1,13 @@
 # Python package scs_qmbboot: ctypes bindings to the solver libraries built
-# by CMakeLists.txt (python/). Linux: MKL Gram and QDLDL backends, needs MKL
-# (MKLROOT); macOS: Accelerate and QDLDL backends.
+# by python/CMakeLists.txt. On Linux it has the MKL Gram and QDLDL backends
+# and builds against MKL:
 #
 #   MKLROOT=$CONDA_PREFIX pip install .
 #
-# On x86_64 Linux: -march=x86-64-v4 if the build machine has AVX-512, unless
-# -Ccmake.define.CMAKE_C_FLAGS=... sets a -march (e.g. -march=native).
+# On macOS it has the Accelerate and QDLDL backends.
 
 [build-system]
-requires = ["scikit-build-core>=0.11"]
+requires = ["scikit-build-core>=0.11", "setuptools-scm>=10"]
 build-backend = "scikit_build_core.build"
 
 [project]
@@ -35,10 +34,12 @@ wheel.py-api = "py3"
 install.components = ["python"]
 
 [tool.scikit-build.metadata.version]
-provider = "scikit_build_core.metadata.regex"
-input = "include/glbopts.h"
-regex = 'SCS_VERSION \("(?P<value>[^"]+)"\)'
-result = "{value}+qmbboot.1"
+provider = "scikit_build_core.metadata.setuptools_scm"
+
+# version 0.1.dev<commits>+g<hash>: git describe ignores all tags
+[tool.setuptools_scm.scm.git]
+describe_command = ["git", "describe", "--dirty", "--tags", "--long",
+                    "--abbrev=40", "--exclude", "*"]
 
 [tool.scikit-build.cmake.define]
 USE_OPENMP = "ON"
